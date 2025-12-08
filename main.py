@@ -4,19 +4,23 @@ import os
 import time
 from dotenv import load_dotenv
 
-#toxic_detector.py를 불러옵니다.
+# [Import] src 폴더 내의 모듈을 불러옵니다.
 from src.toxic_detector import ToxicClauseDetector
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(
-    page_title="근로계약서 독소조항 판별기 (Standard Ver.)",
+    page_title="근로계약서 독소조항 판별기",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. 더미 데이터 및 파싱 함수 ---
-# pdf 올리는 방식으로 업데이트 예정
+# --- 2. 헬퍼 함수들 (PDF 파싱 & 더미 데이터) ---
+
+def extract_text_from_pdf(pdf_file):
+    """PDF 파일에서 텍스트를 추출하는 함수"""
+    pass
+
 def get_dummy_contract_text():
     """테스트용 가상 근로계약서 텍스트"""
     return """
@@ -46,20 +50,19 @@ def get_dummy_contract_text():
 
 def parse_text_to_chunks(text):
     """텍스트를 '제N조' 기준으로 자르는 파서"""
+    if not text:
+        return []
     split_pattern = r'(?=\n\s*제\s*\d+\s*조)'
     chunks = re.split(split_pattern, text)
     # 공백 제거 및 유효한 조항만 필터링
     clean_chunks = [c.strip() for c in chunks if len(c.strip()) > 10]
     return clean_chunks
 
-# --- 3. 단위 작업 함수 (Helper) ---
 def process_single_clause(detector, clause, index):
-    """하나의 조항을 분석하고 결과를 반환하는 함수"""
+    """단위 작업: 조항 하나 분석"""
     try:
-        # 1. 독소조항 탐지
         detection = detector.detect(clause)
         
-        # 2. 수정 제안 생성 (독소조항일 때만)
         suggestion = ""
         if detection['is_toxic']:
             suggestion = detector.generate_easy_suggestion(detection)
@@ -82,7 +85,7 @@ def process_single_clause(detector, clause, index):
             "status": "error"
         }
 
-# --- 4. 메인 어플리케이션 ---
+# --- 3. 메인 어플리케이션 ---
 def main():
     # 사이드바 설정
     with st.sidebar:
@@ -100,15 +103,33 @@ def main():
         if api_key_input:
             os.environ["GEMINI_API_KEY"] = api_key_input
 
-        st.info("💡 순차 처리(Sequential Processing) 방식의 안정적인 데모 버전입니다.")
+        st.info("💡 PDF 파일을 올리면 해당 내용을, 올리지 않으면 예시 데이터를 분석합니다.")
 
     # 메인 화면
     st.title("📄 근로계약서 독소조항 판별기")
-    st.markdown("계약서 내용을 입력하면 AI가 **한 조항씩 꼼꼼하게** 분석합니다.")
+    st.markdown("계약서를 업로드하거나 내용을 직접 입력하면 AI가 **독소조항**을 찾아냅니다.")
 
-    # [입력 영역] 텍스트 에디터 사용
-    default_text = get_dummy_contract_text()
-    contract_text = st.text_area("계약서 내용 (수정 가능)", value=default_text, height=300)
+    # --- [핵심 변경] 파일 업로드 및 텍스트 로딩 로직 ---
+    uploaded_file = st.file_uploader("근로계약서 PDF 업로드 (선택사항)", type=["pdf"])
+    
+    contract_content = ""
+    
+    if uploaded_file is not None:
+        with st.spinner("PDF에서 텍스트를 추출하는 중..."):
+            extracted_text = extract_text_from_pdf(uploaded_file)
+            if extracted_text:
+                contract_content = extracted_text
+                st.success("PDF 텍스트 추출 완료!")
+            else:
+                contract_content = get_dummy_contract_text()
+                st.warning("PDF 텍스트 추출에 실패하여 예시 데이터를 불러옵니다.")
+    else:
+        # 파일이 없으면 더미 데이터 사용
+        contract_content = get_dummy_contract_text()
+
+    # 텍스트 에디터 (수정 가능)
+    # PDF 내용을 불러왔더라도 여기서 사용자가 오타를 수정할 수 있음
+    final_text = st.text_area("계약서 내용 확인 및 수정", value=contract_content, height=300)
 
     # API 키 체크
     if not os.environ.get("GEMINI_API_KEY"):
@@ -119,16 +140,15 @@ def main():
     if st.button("🚀 독소조항 분석 시작", use_container_width=True):
         
         # 1. Parsing
-        chunks = parse_text_to_chunks(contract_text)
+        chunks = parse_text_to_chunks(final_text)
         
         if not chunks:
-            st.error("분석할 조항을 찾지 못했습니다. '제N조' 형식이 포함되어 있는지 확인해주세요.")
+            st.error("분석할 조항을 찾지 못했습니다. 텍스트에 '제N조' 형식이 포함되어 있는지 확인해주세요.")
             st.stop()
 
         # 2. Detector 초기화 (캐싱)
         @st.cache_resource
         def get_detector():
-            # [중요] 객체 생성 시 괄호 () 필수
             return ToxicClauseDetector()
         
         with st.spinner("⚙️ 법령 DB 및 AI 엔진 초기화 중... (최초 1회만 소요)"):
@@ -136,27 +156,21 @@ def main():
 
         st.info(f"총 {len(chunks)}개의 조항을 순서대로 분석합니다.")
 
-        # 3. 순차 실행 루프 (Sequential Loop)
+        # 3. 순차 실행 루프
         results = []
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         for i, clause in enumerate(chunks):
-            # 실시간 상태 표시
             status_text.markdown(f"**🕵️ 분석 중 ({i+1}/{len(chunks)}):** 제{i+1}조 심사 중...")
             
-            # --- 분석 실행 (동기 방식) ---
             res = process_single_clause(detector, clause, i)
             results.append(res)
             
-            # 진행률 업데이트
             progress_bar.progress((i + 1) / len(chunks))
-            
-            # 짧은 대기 (UX용, 너무 빠르면 눈에 안 보일 수 있음)
-            # time.sleep(0.1) 
 
         status_text.success("✅ 모든 분석이 완료되었습니다!")
-        st.session_state.analysis_results = results # 결과 저장
+        st.session_state.analysis_results = results
         
         # 4. 결과 리포트 출력
         st.divider()
