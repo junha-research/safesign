@@ -1,8 +1,9 @@
 import os
 import json
 import re
-from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from dotenv import load_dotenv
+# from langchain_google_genai import ChatGoogleGenerativeAI (염준화)
+from src.llm_service import LLM_gemini
 
 # [추가] 실행을 위한 필수 라이브러리 및 임시 클래스 정의
 # ---------------------------------------------------------------------------
@@ -13,18 +14,20 @@ except ImportError:
     def search_precedents(text, k=1): return ["(판례 검색 모듈이 아직 구현되지 않음)"]
 
 # 2. DeepEval 인터페이스 호환을 위한 Gemini Wrapper
-class GeminiWrapper:
-    def __init__(self):
-        load_dotenv()
-        api_key = os.getenv("GEMINI_API_KEY")
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.0,
-            google_api_key=api_key
-        )
+# llm_service의 LLM_gemini로 통합 (염준화)
+
+# class GeminiWrapper:
+#     def __init__(self):
+#         load_dotenv()
+#         api_key = os.getenv("GEMINI_API_KEY")
+#         self.llm = ChatGoogleGenerativeAI(
+#             model="gemini-2.5-flash",
+#             temperature=0.0,
+#             google_api_key=api_key
+#         )
     
-    def generate(self, prompt):
-        return self.llm.invoke(prompt).content
+#     def generate(self, prompt):
+#         return self.llm.invoke(prompt).content
 
 # 3. LawManager가 구현되지 않았을 때를 위한 Mock Class
 class MockLawManager:
@@ -40,9 +43,11 @@ from deepeval.metrics.g_eval import Rubric
 # from .rag_pipeline import search_precedents (상단 try-except로 이동하여 처리함)
 
 class ToxicClauseDetector():
-    def __init__(self):
+    # 사용자 gemini_api를 가져올 수 있게 수정(염준화)
+    def __init__(self,gemini_api):
         # 독소조항 판병하는 llm 모델, DeepEval용 Wrapper 써야함
-        self.evaluator_llm = GeminiWrapper()
+        # 
+        self.evaluator_llm = LLM_gemini(gemini_api,"gemini-2.5-flash")
         
         # 법령 정보를 관리하는 인스턴스, DB 초기화 및 법령 검색 기능
         self.law_manager = MockLawManager()

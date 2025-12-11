@@ -6,6 +6,7 @@ class LLM_gemini():
     def __init__(self, gemini_api_key, model):
         self.GEMINI_API_KEY = gemini_api_key
         self.model_name = model
+        self.client = genai.Client(api_key=self.GEMINI_API_KEY)
 
     # pdf를 text로 추출하는 함수
     # 아직까지는 pdf를 text로 추출할 때만 gemini를 사용하기 때문에 client를 함수 내부에서 생성했다.
@@ -20,6 +21,7 @@ class LLM_gemini():
         2. 조항의 제목과 본문은 줄바꿈으로 구분하십시오.
         3. 각 조항 사이에는 빈 줄을 추가하십시오.
         4. 서문(계약 당사자 정의 등)이 있다면 맨 위에 적어주십시오.
+        5. 번호를 매길 때 "제(숫자)조" 형태로 적으시오.
 
         [출력 양식 예시]
         제1조 (목적)
@@ -29,9 +31,8 @@ class LLM_gemini():
         1. 월 급여는...
         2. 위 급여에는...
         """
-
-        client = genai.Client(api_key= self.GEMINI_API_KEY)
-        response = client.models.generate_content(
+        
+        response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[
                     genai.types.Part.from_bytes(data=pdf_file_bytes, mime_type="application/pdf"),
@@ -42,8 +43,11 @@ class LLM_gemini():
     
     # prompt에 맞는 텍스트를 출력하는 함수
     # toxic_detector.py에서 필요하다.
-    def generate(self,promot):
-        result = ''
-        return result
+    def generate(self,prompt):
+        response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+        return response
     
 
