@@ -5,7 +5,8 @@ import time
 from dotenv import load_dotenv
 
 # [Import] src 폴더 내의 모듈을 불러옵니다.
-from src.toxic_detector import ToxicClauseDetector
+from toxic_detector import ToxicClauseDetector
+from llm_service import LLM_gemini
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(
@@ -17,9 +18,12 @@ st.set_page_config(
 
 # --- 2. 헬퍼 함수들 (PDF 파싱 & 더미 데이터) ---
 
-def extract_text_from_pdf(pdf_file):
+def extract_text_from_pdf(pdf_file,api_key,model_name): 
     """PDF 파일에서 텍스트를 추출하는 함수"""
-    pass
+    pdf_file_bytes = pdf_file.read()   
+    gemini = LLM_gemini(gemini_api_key=api_key, model=model_name)
+    result = gemini.pdf_to_text(pdf_file_bytes)
+    return result
 
 def get_dummy_contract_text():
     """테스트용 가상 근로계약서 텍스트"""
@@ -85,7 +89,7 @@ def process_single_clause(detector, clause, index):
             "status": "error"
         }
 
-# --- 3. 메인 어플리케이션 ---
+# --- 3. 메인 어플리케이션 --- 
 def main():
     # 사이드바 설정
     with st.sidebar:
@@ -116,7 +120,7 @@ def main():
     
     if uploaded_file is not None:
         with st.spinner("PDF에서 텍스트를 추출하는 중..."):
-            extracted_text = extract_text_from_pdf(uploaded_file)
+            extracted_text = extract_text_from_pdf(uploaded_file,api_key_input,'gemini-2.0-flash-lite')
             if extracted_text:
                 contract_content = extracted_text
                 st.success("PDF 텍스트 추출 완료!")
@@ -148,11 +152,11 @@ def main():
 
         # 2. Detector 초기화 (캐싱)
         @st.cache_resource
-        def get_detector():
-            return ToxicClauseDetector()
+        def get_detector(key):
+            return ToxicClauseDetector(key)
         
         with st.spinner("⚙️ 법령 DB 및 AI 엔진 초기화 중... (최초 1회만 소요)"):
-            detector = get_detector()
+            detector = get_detector(api_key_input)
 
         st.info(f"총 {len(chunks)}개의 조항을 순서대로 분석합니다.")
 

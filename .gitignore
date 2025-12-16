@@ -210,5 +210,33 @@ __marimo__/
 .deepeval/
 .deepeval
 
+
+# React 
+# 1. 의존성 모듈 (절대 올리면 안 됨)
+node_modules/
+.pnp
+.pnp.js
+
+# 2. 테스팅 커버리지 파일
+coverage/
+
+# 3. 빌드 결과물 (배포용 파일이므로 제외)
+build/
+dist/
+
+# 4. 환경 변수 설정 파일 (보안 중요! ★)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 5. 기타 시스템 파일 및 로그
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 #contracts
 contracts/
