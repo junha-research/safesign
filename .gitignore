@@ -240,3 +240,4 @@ yarn-error.log*
 
 #contracts
 contracts/
+src/imgages/*
